@@ -1,0 +1,124 @@
+---
+title: "Homework 2"
+author: "Angelique Carrillo"
+date: "2024-10-21"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(shiny)
+library(DT)
+library(tidyverse)
+library(readr)
+```
+
+```{r}
+titanic_data <- read_csv("https://drive.google.com/uc?export=download&id=1jDDvXs2XBnAzF-zqyeeEl2yE3DNY3Wxo")
+```
+
+```{r}
+#user interface
+ui <- fluidPage(
+    tags$style(HTML("
+    .container-fluid {
+      width: 95% !important;
+      max-width: 100%;
+    }
+  ")),
+  titlePanel("Titanic Survival Analysis"), 
+  sidebarLayout(
+    sidebarPanel(
+      # Dropdown to select a Passenger Class (either 1st, 2nd, 3rd, or All Classes)
+      selectInput("pclass", "Select Passenger Class:", choices = c("All", unique(titanic_data$Pclass)), selected = "All"),
+      
+      # Slider to filter passengers by age range
+      sliderInput("age", "Select Age Range:", min = 0, max = 90, value = c(0,90)),
+    ),
+      mainPanel(
+        plotOutput("survivalPlot"), # Plot the Survivors based on Sex
+        plotOutput("agePlot"), # Plot age distribution of all passengers within the filters (survivors and non-survivors)
+        DTOutput("summaryTable") # Summary table of all passengers within the specified filters
+    )
+  )
+)
+
+server <- function(input, output) {
+  filtered_data <- reactive({
+    data <- titanic_data %>% 
+      # Filtering by age range
+      filter(Age >= input$age[1] & Age <= input$age[2]) %>%
+      # Make sure the "Survived" column is dealt with as a factor and not numeric 
+      mutate(Survived = as.factor(Survived), Sex = as.factor(Sex))
+
+    # Either filter by a specific passenger class otherwise just keep them all
+    if (input$pclass != "All") {
+      data <- data %>% filter(Pclass == input$pclass)
+    }
+    data
+  })
+  
+  output$survivalPlot <- renderPlot({
+    # Plot the bar chart and fill in the bars based on Sex (either Female or Male)
+    ggplot(filtered_data(), aes(x = Survived, fill = Sex, group = Sex)) + 
+      geom_bar(position = "dodge") +
+      expand_limits(y=150) + # Keep the scale the same throughout filtering to avoid confusion/memorization for viewers
+      labs(title = "Survival by Gender", x = "Survived", y = "Count") + theme_minimal()
+  })
+  
+  output$agePlot <- renderPlot({
+    # Render the Age Distribution Plot, color the bars based on Survived
+    ggplot(filtered_data(), aes(x = Age, fill = Survived, group = Survived)) +
+      geom_histogram(bins = 30, alpha = 0.6, position = "identity") + 
+      expand_limits(y = 100) + 
+      labs(title = "Age Distribution of Passengers", x = "Age", y = "Count") +  
+      theme_minimal()
+    }) 
+    
+  #render a histogram showing the age distribution of passengers that match the filters set by the user
+    output$summaryTable <- renderDT({
+    filtered_data() %>%  # Use the filtered data based on user inputs
+      select(Name, Age, Sex, Pclass, Survived)  # Select specific columns to display in the table
+  })
+}
+
+shinyApp(ui, server)
+
+```
+
+
+## Interesting Findings
+Some interesting findings I gathered from my visualization were...
+  
+  1. **Survival Rate by Gender: **Females had a significantly higher survival rates across all classes compared to males. Especially for third class passengers, where over four times the amount of men died than women. This aligns with the known policy of prioritizing women's safety during the evacuation.
+  
+  2. **Survival Rate by Class: **First class passengers had a much higher survival rate when compared to second and third classes, indicating that wealth and social class influenced one's chance of survival. This surprised me since I had assumed that evacuation depended soley on proximity to exits rather than social class.
+  
+  3. **Age Related Survival Trends: **The histogram shows that the majority of passengers fell within the 18-35 age range, which had a peak in both survivors and non-survivors. Below age 18, the number of survivors was mostly greater than non-survivors, indicating that children were given higher priority during evacuation. Conversely, beyond age 35, the number of non-survivors exceeded that of survivors, suggesting that elderly passengers faced greater challenges during evacuation and were less prioritized.
+  
+  4. **Infants' High Survival Rate: **Infants (close to age 0) had a relatively high survival rate, which surprised me since I assumed passengers so young would not be able to handle the weather conditions and would not be able to swim if needed.
+
+## Interface Creation
+I created this interface by building on the foundational concepts covered in class, ensuring I incorporated the elements needed for simple and effective user interaction. To fully implement my vision, I also referred to R documentation (https://www.rdocumentation.org/packages/shiny/versions/1.9.1) to allow me to find creative ways to take my visualization to the next level.
+
+The interface consists of a sidebar panel for filtering user inputs and a main panel for displaying output visualizations. The sidebar has a dropdown for filtering between passenger classes, and a slider to allow users to filter through different age ranges among passengers.
+
+For the style customization and used a minimal aesthetic to keep the focus on the data visualizations. Making sure there was a consistent y-axis in the plots was to ensure comparability across different filters was easy and not too strenuous on viewers minds. These customizations were implemented to make sure the visualizaiton was informative and visually consistent.
+
+## Reactive Graph Structure
+The reactive graph structure of the application revolves around dynamically updating outputs based on user input. The main component of this is the **filtered_data()** reactive expression, which updates as users adjust the passenger class or age filters
+
+  1. **Reactive Input: **The dropdown menu for selecting passenger class (**input\$pclass**) and the slider for age range (**input\$age**) provides inputs to filter the Titanic dataset.
+  
+  2. **Reactive Expression: **The **filtered_data()** function serves as the reactive data source that reacts to any changes in the user input. This will be automatically updated with any changes the user makes to the filters.
+  
+  3. **Outputs: **
+    a. The **Survival by Gender Plot** (output\$survivalPlot) displays a bar chart that updates based on changes to the reactive data made with both the slider and the dropdown menu.
+    b. The **Age Distribution Histogram** (output\$agePlot) updates to reflect filtering changes made with the slider.
+    c. The **Summary Table** (output$summaryTable) provides an interactive table view of the filtered passengers, allowing users to see information after making their selections and even being able to search through this list of filtered passengers.
+    
+Here, each output in the app responds automatically to changes in user input, making this visualization highly interactive and engaging.
